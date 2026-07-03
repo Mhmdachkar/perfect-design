@@ -79,10 +79,6 @@
   "optionalDependencies": {
     "@rolldown/binding-linux-x64-gnu": "1.1.4"
   },
-  "overrides": {
-    "picomatch": "4.0.4",
-    "import-in-the-middle": "3.2.0"
-  },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "^2.6.4",
