@@ -1,9 +1,12 @@
 [build]
-  command = "npm run build"
+  command = "npm install && npm run build"
   publish = "dist/client"
 
 [build.environment]
   NODE_VERSION = "22.12.0"
+  # Skip Netlify's automatic npm install (uses npm 10, conflicts with our lockfile).
+  # We install deps ourselves in the build command instead.
+  NPM_FLAGS = "--version"
 
 [dev]
   command = "npm run dev"
