@@ -38,4 +38,16 @@ describe("validateWorkshopProduct", () => {
       measurement: "30×40 cm",
     });
   });
+
+  it("allows optional custom measurement for products without required dimensions", () => {
+    const product = findWorkshopProduct("curtain-blackout")!;
+    const state = {
+      ...emptyProductFormState(),
+      productId: "curtain-blackout",
+      groupId: "curtains-store",
+      cover: "With Cover",
+      customMeasurement: "280×260 cm",
+    };
+    expect(validateWorkshopProduct(product, state)).toBeNull();
+  });
 });

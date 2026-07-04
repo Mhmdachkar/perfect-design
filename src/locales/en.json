@@ -485,6 +485,9 @@
     "measurementRequired": "Select a measurement preset.",
     "sizeRequired": "Select a size.",
     "customMeasurementRequired": "Enter custom dimensions in cm.",
+    "optionalMeasurement": "Additional measurements (optional)",
+    "optionalMeasurementPlaceholder": "e.g. 150×200 cm — leave blank if not needed",
+    "optionalMeasurementHint": "Optional custom dimensions or notes for this order.",
     "customStickerSizeRequired": "Enter custom sticker dimensions in cm."
   },
   "clientsPage": {

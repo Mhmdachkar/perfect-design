@@ -207,6 +207,18 @@ export function WorkshopProductFields({ state, onChange, onProductSelect }: Prop
           <p className="text-[11px] text-muted-foreground">{t("workshopProduct.customMeasurementHint")}</p>
         </div>
       )}
+
+      {product && product.measurementKind !== "free_text" && (
+        <div className="space-y-1.5">
+          <Label>{t("workshopProduct.optionalMeasurement")}</Label>
+          <Input
+            placeholder={t("workshopProduct.optionalMeasurementPlaceholder")}
+            value={state.customMeasurement}
+            onChange={(e) => onChange({ customMeasurement: e.target.value })}
+          />
+          <p className="text-[11px] text-muted-foreground">{t("workshopProduct.optionalMeasurementHint")}</p>
+        </div>
+      )}
     </div>
   );
 }

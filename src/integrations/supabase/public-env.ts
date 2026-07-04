@@ -44,12 +44,3 @@ export function getSupabasePublicEnvOrThrow(): SupabasePublicEnv {
   console.error(`[Supabase] ${message}`);
   throw new Error(message);
 }
-
-/** Inline script for SSR: exposes public Supabase config to the browser at runtime. */
-export function getSupabaseRuntimeEnvScript(): string | null {
-  const env = getSupabasePublicEnv();
-  if (!env) return null;
-
-  const payload = JSON.stringify(env).replace(/</g, "\\u003c");
-  return `window.__SUPABASE_ENV__=${payload}`;
-}

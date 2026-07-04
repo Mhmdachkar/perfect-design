@@ -90,8 +90,7 @@ function workshopPayload(
 ) {
   const product = findWorkshopProduct(productState.productId);
   const options = product ? buildOptionsSnapshot(product, productState) : {};
-  const customMeasurement =
-    product?.measurementKind === "free_text" ? productState.customMeasurement.trim() || null : null;
+  const customMeasurement = productState.customMeasurement.trim() || null;
 
   return {
     user_id: userId,

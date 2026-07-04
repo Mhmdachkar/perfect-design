@@ -485,6 +485,9 @@
     "measurementRequired": "اختر مقاساً جاهزاً.",
     "sizeRequired": "اختر الحجم.",
     "customMeasurementRequired": "أدخل الأبعاد المخصصة بالسم.",
+    "optionalMeasurement": "مقاسات إضافية (اختياري)",
+    "optionalMeasurementPlaceholder": "مثال: 150×200 سم — اتركه فارغاً إن لم يلزم",
+    "optionalMeasurementHint": "أبعاد أو ملاحظات مخصصة اختيارية لهذا الطلب.",
     "customStickerSizeRequired": "أدخل أبعاد الملصق المخصصة بالسم."
   },
   "clientsPage": {
