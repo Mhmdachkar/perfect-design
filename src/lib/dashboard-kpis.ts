@@ -33,31 +33,6 @@ function round1(n: number) {
   return Math.round(n * 10) / 10;
 }
 
-function normalizeKpis(raw: Record<string, unknown>): DashboardKPIs {
-  const num = (key: string) => Number(raw[key] ?? 0);
-  return {
-    total_clients: num("total_clients"),
-    total_workshops: num("total_workshops"),
-    open_workshops: num("open_workshops"),
-    completed_workshops: num("completed_workshops"),
-    cancelled_workshops: num("cancelled_workshops"),
-    total_revenue: num("total_revenue"),
-    total_received: num("total_received"),
-    outstanding: num("outstanding"),
-    today_received: num("today_received"),
-    month_received: num("month_received"),
-    month_expenses: num("month_expenses"),
-    total_expenses: num("total_expenses"),
-    profit: num("profit"),
-    net_income: num("net_income"),
-    overdue_invoices: num("overdue_invoices"),
-    collection_rate: num("collection_rate"),
-    avg_payment_delay_days: num("avg_payment_delay_days"),
-    avg_workshop_value: num("avg_workshop_value"),
-    avg_client_value: num("avg_client_value"),
-  };
-}
-
 async function fetchDashboardKpisFromTables(): Promise<DashboardKPIs> {
   const monthStart = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
 
@@ -139,17 +114,7 @@ async function fetchDashboardKpisFromTables(): Promise<DashboardKPIs> {
   };
 }
 
-/** KPIs aligned with list-page queries; falls back when RPC is missing or returns empty. */
+/** KPIs aligned with list-page queries; uses table queries (RPC optional when deployed). */
 export async function fetchDashboardKpis(): Promise<DashboardKPIs> {
-  const { data, error } = await supabase.rpc("dashboard_kpis");
-  if (
-    !error &&
-    data &&
-    typeof data === "object" &&
-    !Array.isArray(data) &&
-    "total_clients" in data
-  ) {
-    return normalizeKpis(data as Record<string, unknown>);
-  }
   return fetchDashboardKpisFromTables();
 }

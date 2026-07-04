@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
+import { appQueryOptions, useAppQuery, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Empty } from "@/components/app-shell";
@@ -29,6 +29,17 @@ const workshopsQuery = appQueryOptions({
       workshops: ws.data ?? [],
       baseCurrency: settings.data?.base_currency ?? DEFAULT_CURRENCY,
     };
+  },
+});
+
+const workshopTagsFilterQuery = appQueryOptions({
+  queryKey: ["workshop-tags-filter"],
+  queryFn: async () => {
+    const [tags, assigns] = await Promise.all([
+      supabase.from("workshop_tags").select("id,name,color"),
+      supabase.from("workshop_tag_assignments").select("workshop_id,tag_id"),
+    ]);
+    return { tags: tags.data ?? [], assigns: assigns.data ?? [] };
   },
 });
 
@@ -72,16 +83,7 @@ function WorkshopsPage() {
     label: t(`statuses.${v}`),
   }));
 
-  const { data: tagData } = useQuery({
-    queryKey: ["workshop-tags-filter"],
-    queryFn: async () => {
-      const [tags, assigns] = await Promise.all([
-        supabase.from("workshop_tags").select("id,name,color"),
-        supabase.from("workshop_tag_assignments").select("workshop_id,tag_id"),
-      ]);
-      return { tags: tags.data ?? [], assigns: assigns.data ?? [] };
-    },
-  });
+  const { data: tagData } = useAppQuery(workshopTagsFilterQuery);
 
   let filtered = workshops.filter((w: any) =>
     !q || w.name?.toLowerCase().includes(q.toLowerCase()) || w.client_name?.toLowerCase().includes(q.toLowerCase())

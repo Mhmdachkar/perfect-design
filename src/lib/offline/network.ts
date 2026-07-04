@@ -12,7 +12,6 @@ const qualityListeners = new Set<ConnectionQualityListener>();
 
 let initialized = false;
 let degradedUntil = 0;
-let slowByApi = false;
 let degradedTimer: ReturnType<typeof setTimeout> | undefined;
 
 function emit(online: boolean) {
@@ -20,29 +19,23 @@ function emit(online: boolean) {
   emitConnectionQuality();
 }
 
-function readSlowFromNavigator() {
-  if (typeof navigator === "undefined") return false;
-  const conn = (navigator as Navigator & {
-    connection?: { effectiveType?: string; saveData?: boolean; downlink?: number };
-  }).connection;
-  if (!conn) return false;
-  if (conn.saveData) return true;
-  if (conn.effectiveType === "slow-2g" || conn.effectiveType === "2g") return true;
-  if (typeof conn.downlink === "number" && conn.downlink > 0 && conn.downlink < 0.5) return true;
-  return false;
-}
-
 function isDegradedByTimeout() {
   return Date.now() < degradedUntil;
 }
 
+/** True after a request timed out — used for offline fallbacks, not navigator heuristics. */
 export function isSlowConnection() {
-  return slowByApi || isDegradedByTimeout();
+  return isDegradedByTimeout();
 }
 
-/** True when the browser reports offline, or the connection is slow/unreliable. */
+/** Banner visibility: offline, or a request recently timed out. */
+export function shouldShowOfflineBanner() {
+  return !isBrowserOnline() || isDegradedByTimeout();
+}
+
+/** @deprecated Use shouldShowOfflineBanner for UI; kept for subscribers. */
 export function isPoorConnection() {
-  return !isBrowserOnline() || isSlowConnection();
+  return shouldShowOfflineBanner();
 }
 
 export function markConnectionDegraded(durationMs = DEGRADED_TTL_MS) {
@@ -56,28 +49,16 @@ export function markConnectionDegraded(durationMs = DEGRADED_TTL_MS) {
 }
 
 function emitConnectionQuality() {
-  const poor = isPoorConnection();
+  const poor = shouldShowOfflineBanner();
   qualityListeners.forEach((listener) => listener(poor));
-}
-
-function refreshSlowFromNavigator() {
-  slowByApi = readSlowFromNavigator();
-  emitConnectionQuality();
 }
 
 export function initNetworkListeners() {
   if (initialized || typeof window === "undefined") return;
   initialized = true;
 
-  window.addEventListener("online", () => {
-    emit(true);
-    refreshSlowFromNavigator();
-  });
+  window.addEventListener("online", () => emit(true));
   window.addEventListener("offline", () => emit(false));
-
-  const conn = (navigator as Navigator & { connection?: { addEventListener?: (t: string, fn: () => void) => void } }).connection;
-  conn?.addEventListener?.("change", refreshSlowFromNavigator);
-  refreshSlowFromNavigator();
 }
 
 export function isBrowserOnline() {
@@ -95,7 +76,7 @@ export function subscribeNetworkStatus(listener: NetworkListener) {
 export function subscribeConnectionQuality(listener: ConnectionQualityListener) {
   initNetworkListeners();
   qualityListeners.add(listener);
-  listener(isPoorConnection());
+  listener(shouldShowOfflineBanner());
   return () => qualityListeners.delete(listener);
 }
 
