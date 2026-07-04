@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Empty } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -8,12 +9,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/format";
-import { restoreRow } from "@/lib/soft-delete";
 import { invalidateAfterRecycleChange } from "@/lib/invalidate-app-data";
+import { runRestore } from "@/lib/offline/run-write";
 import { prefetchRouteQuery } from "@/lib/prefetch-route";
 import { useState } from "react";
 
-const recycleQuery = queryOptions({
+const recycleQuery = appQueryOptions({
   queryKey: ["recycle"],
   queryFn: async () => {
     const [clients, workshops, payments, expenses, notes, documents] = await Promise.all([
@@ -43,7 +44,7 @@ const TABLE_KEYS = ["clients", "workshops", "payments", "expenses", "notes", "do
 
 function RecycleBin() {
   const { t } = useTranslation();
-  const { data } = useSuspenseQuery(recycleQuery);
+  const { data } = useAppSuspenseQuery(recycleQuery);
   const TABLES = TABLE_KEYS.map((key) => ({
     key,
     table: key as typeof TABLE_KEYS[number],
@@ -84,15 +85,19 @@ function RecycleBin() {
   }
 
   async function restore(table: typeof TABLES[number]["table"], id: string) {
-    const { error } = await restoreRow(table, id);
-    if (error) return toast.error(error.message);
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.delete(rowKey(table, id));
-      return next;
+    await runRestore({
+      qc,
+      t,
+      table,
+      id,
+      onSaved: () => {
+        setSelected((prev) => {
+          const next = new Set(prev);
+          next.delete(rowKey(table, id));
+          return next;
+        });
+      },
     });
-    toast.success(t("toasts.restored"));
-    invalidateAfterRecycleChange(qc);
   }
 
   async function restoreSelected() {
@@ -102,12 +107,11 @@ function RecycleBin() {
     });
     let ok = 0;
     for (const { table, id } of pairs) {
-      const { error } = await restoreRow(table, id);
-      if (!error) ok++;
+      const success = await runRestore({ qc, t, table, id });
+      if (success) ok++;
     }
     setSelected(new Set());
     toast.success(t("toasts.restoredCount", { count: ok }));
-    invalidateAfterRecycleChange(qc);
   }
 
   async function destroy(table: string, id: string) {

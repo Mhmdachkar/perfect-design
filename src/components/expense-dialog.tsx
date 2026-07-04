@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { usePh } from "@/hooks/use-ph";
-import { invalidateAfterExpenseChange } from "@/lib/invalidate-app-data";
+import { writeInsert, writeUpdate } from "@/lib/offline/offline-write";
+import { runWrite } from "@/lib/offline/run-write";
 import { expenseSchema, formatZodError } from "@/lib/schemas";
 import { CurrencySelect } from "@/components/currency-select";
 import { CurrencyConversionHint } from "@/components/currency-conversion-hint";
@@ -88,28 +89,45 @@ export function ExpenseDialog({
       return;
     }
     setSaving(true);
-    const { data: u } = await supabase.auth.getUser();
-    const payload = {
-      name: parsed.data.name,
-      amount: parsed.data.amount,
-      currency: parsed.data.currency as "USD" | "LBP",
-      category: parsed.data.category as (typeof CATS)[number],
-      expense_date: parsed.data.expense_date,
-      vendor: parsed.data.vendor?.trim() || null,
-      client_id: form.client_id || null,
-      workshop_id: form.workshop_id || null,
-    };
-    const { error } = isEdit
-      ? await supabase.from("expenses").update(payload).eq("id", expense.id)
-      : await supabase.from("expenses").insert({ ...payload, user_id: u.user!.id });
+    const expenseScopes = ["expenses", "clients", "dashboard", "reports", "activity"] as const;
+    const saved = await runWrite({
+      qc,
+      t,
+      meta: {
+        scopes: [...expenseScopes],
+        extraQueryKeys: form.client_id ? [["client", form.client_id]] : undefined,
+      },
+      successKey: isEdit ? "toasts.expenseUpdated" : "toasts.expenseAdded",
+      write: async () => {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user) throw new Error("Not signed in");
+        const row = {
+          name: parsed.data.name,
+          amount: parsed.data.amount,
+          currency: parsed.data.currency as "USD" | "LBP",
+          category: parsed.data.category as (typeof CATS)[number],
+          expense_date: parsed.data.expense_date,
+          vendor: parsed.data.vendor?.trim() || null,
+          client_id: form.client_id || null,
+          workshop_id: form.workshop_id || null,
+        };
+        if (isEdit) {
+          return writeUpdate({
+            table: "expenses",
+            payload: row,
+            match: { column: "id", value: expense.id },
+            scopes: [...expenseScopes],
+          });
+        }
+        return writeInsert({
+          table: "expenses",
+          payload: { ...row, user_id: u.user.id },
+          scopes: [...expenseScopes],
+        });
+      },
+    });
     setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(isEdit ? t("toasts.expenseUpdated") : t("toasts.expenseAdded"));
-    setOpen(false);
-    invalidateAfterExpenseChange(qc);
-    if (form.client_id) {
-      qc.invalidateQueries({ queryKey: ["client", form.client_id] });
-    }
+    if (saved) setOpen(false);
   }
 
   const lockClient = !!clientId && !isEdit;

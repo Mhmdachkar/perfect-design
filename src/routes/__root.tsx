@@ -1,4 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import {
   Outlet,
   Link,
@@ -18,6 +20,19 @@ import { useLocaleSync } from "@/hooks/use-locale";
 import { logAuthActivity } from "@/lib/auth-activity";
 import { useUiStore } from "@/stores/ui-store";
 import { APP_NAME, APP_TAGLINE } from "@/lib/brand";
+import { initSyncEngine } from "@/lib/offline/sync-engine";
+import { clearQueue } from "@/lib/offline/queue-store";
+import { OfflineBanner } from "@/components/offline-banner";
+import { OfflineQueryRestoreGate } from "@/components/offline-query-restore-gate";
+import { isBrowserOnline } from "@/lib/offline/network";
+
+const queryPersister =
+  typeof window !== "undefined"
+    ? createSyncStoragePersister({
+        storage: window.localStorage,
+        key: "perfect-design-query-cache",
+      })
+    : undefined;
 
 function NotFoundComponent() {
   return (
@@ -112,6 +127,10 @@ function RootComponent() {
   const locale = useUiStore((s) => s.locale);
 
   useEffect(() => {
+    initSyncEngine(queryClient);
+  }, [queryClient]);
+
+  useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN") logAuthActivity("auth.signed_in");
       if (event === "SIGNED_OUT") logAuthActivity("auth.signed_out");
@@ -120,7 +139,8 @@ function RootComponent() {
       }
       if (event === "SIGNED_OUT") {
         queryClient.clear();
-      } else if (event !== "INITIAL_SESSION") {
+        void clearQueue();
+      } else if (event !== "INITIAL_SESSION" && isBrowserOnline()) {
         queryClient.invalidateQueries();
       }
     });
@@ -135,9 +155,25 @@ function RootComponent() {
   }, [theme]);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <Outlet />
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={
+        queryPersister
+          ? {
+              persister: queryPersister,
+              maxAge: 1000 * 60 * 60 * 24,
+              dehydrateOptions: {
+                shouldDehydrateQuery: (query) => query.state.status === "success",
+              },
+            }
+          : undefined
+      }
+    >
+      <OfflineQueryRestoreGate>
+        <OfflineBanner />
+        <Outlet />
+      </OfflineQueryRestoreGate>
       <Toaster position={locale === "ar" ? "top-left" : "top-right"} theme={theme === "light" ? "light" : "dark"} />
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }

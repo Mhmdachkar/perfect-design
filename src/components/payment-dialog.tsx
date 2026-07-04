@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { usePh } from "@/hooks/use-ph";
-import { invalidateAfterPaymentChange } from "@/lib/invalidate-app-data";
 import { paymentSchema, formatZodError } from "@/lib/schemas";
+import { writeInsert, writeUpdate } from "@/lib/offline/offline-write";
+import { runWrite } from "@/lib/offline/run-write";
 import {
   defaultPaymentReference,
   nowDateTimeLocal,
@@ -124,31 +125,46 @@ export function PaymentDialog({
       return;
     }
     setSaving(true);
-    const { data: u } = await supabase.auth.getUser();
-    const payload = {
-      amount: parsed.data.amount,
-      currency: parsed.data.currency as AppCurrency,
-      method: parsed.data.method as (typeof METHODS)[number] | (typeof LEGACY_METHODS)[number],
-      received_date: toTimestampIso(form.received_date),
-      due_date: toTimestampIso(form.due_date),
-      reference: parsed.data.reference?.trim() || null,
-      notes: parsed.data.notes?.trim() || null,
-      client_id: parsed.data.client_id,
-      workshop_id: parsed.data.workshop_id || null,
-    };
-
-    const { error } = isEdit
-      ? await supabase.from("payments").update(payload).eq("id", payment!.id)
-      : await supabase.from("payments").insert({ ...payload, user_id: u.user!.id });
-
+    const paymentScopes = ["payments", "workshops", "clients", "dashboard", "reports", "notifications", "activity"] as const;
+    const saved = await runWrite({
+      qc,
+      t,
+      meta: {
+        scopes: [...paymentScopes],
+        extraQueryKeys: form.client_id ? [["client", form.client_id]] : undefined,
+      },
+      successKey: isEdit ? "toasts.paymentUpdated" : "toasts.paymentRecorded",
+      write: async () => {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user) throw new Error("Not signed in");
+        const row = {
+          amount: parsed.data.amount,
+          currency: parsed.data.currency as AppCurrency,
+          method: parsed.data.method as (typeof METHODS)[number] | (typeof LEGACY_METHODS)[number],
+          received_date: toTimestampIso(form.received_date),
+          due_date: toTimestampIso(form.due_date),
+          reference: parsed.data.reference?.trim() || null,
+          notes: parsed.data.notes?.trim() || null,
+          client_id: parsed.data.client_id,
+          workshop_id: parsed.data.workshop_id || null,
+        };
+        if (isEdit) {
+          return writeUpdate({
+            table: "payments",
+            payload: row,
+            match: { column: "id", value: payment!.id },
+            scopes: [...paymentScopes],
+          });
+        }
+        return writeInsert({
+          table: "payments",
+          payload: { ...row, user_id: u.user.id },
+          scopes: [...paymentScopes],
+        });
+      },
+    });
     setSaving(false);
-    if (error) return toast.error(error.message);
-    invalidateAfterPaymentChange(qc);
-    if (form.client_id) {
-      qc.invalidateQueries({ queryKey: ["client", form.client_id] });
-    }
-    toast.success(isEdit ? t("toasts.paymentUpdated") : t("toasts.paymentRecorded"));
-    setOpen(false);
+    if (saved) setOpen(false);
   }
 
   return (

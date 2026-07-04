@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { usePh } from "@/hooks/use-ph";
-import { invalidateAfterWorkshopChange } from "@/lib/invalidate-app-data";
+import { writeInsert, writeUpdate } from "@/lib/offline/offline-write";
+import { runWrite } from "@/lib/offline/run-write";
 import { WorkshopProductFields } from "@/components/workshop-product-fields";
 import { CurrencySelect } from "@/components/currency-select";
 import { CurrencyConversionHint } from "@/components/currency-conversion-hint";
@@ -26,9 +28,8 @@ import {
   type WorkshopProductFormState,
 } from "@/lib/workshop-measurements";
 import { workshopSchema, formatZodError } from "@/lib/schemas";
-import { queryOptions } from "@tanstack/react-query";
 
-const clientsLite = queryOptions({
+const clientsLite = appQueryOptions({
   queryKey: ["clients-lite"],
   queryFn: async () => {
     const { data, error } = await supabase.from("clients").select("id,full_name").is("deleted_at", null).order("full_name");
@@ -123,7 +124,7 @@ export function NewWorkshopDialog() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
-  const { data: clients } = useSuspenseQuery(clientsLite);
+  const { data: clients } = useAppSuspenseQuery(clientsLite);
   const { rate } = useUsdLbpRate();
   const [form, setForm] = useState(emptyForm);
   const [productState, setProductState] = useState(emptyProductFormState);
@@ -160,19 +161,24 @@ export function NewWorkshopDialog() {
       return;
     }
     setSaving(true);
-    try {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Not signed in");
-      const { error } = await supabase.from("workshops").insert(workshopPayload(form, productState, u.user.id));
-      if (error) throw error;
-      toast.success(t("toasts.workshopCreated"));
-      setOpen(false);
-      invalidateAfterWorkshopChange(qc);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : t("auth.errorGeneric"));
-    } finally {
-      setSaving(false);
-    }
+    const workshopScopes = ["workshops", "clients", "dashboard", "reports", "search", "notifications", "activity", "calendar"] as const;
+    const saved = await runWrite({
+      qc,
+      t,
+      meta: { scopes: [...workshopScopes] },
+      successKey: "toasts.workshopCreated",
+      write: async () => {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user) throw new Error("Not signed in");
+        return writeInsert({
+          table: "workshops",
+          payload: workshopPayload(form, productState, u.user.id),
+          scopes: [...workshopScopes],
+        });
+      },
+    });
+    setSaving(false);
+    if (saved) setOpen(false);
   }
 
   return (
@@ -295,31 +301,45 @@ export function EditWorkshopDialog({ workshop }: { workshop: WorkshopRow }) {
       return;
     }
     setSaving(true);
+    const workshopScopes = ["workshops", "clients", "dashboard", "reports", "search", "notifications", "activity", "calendar"] as const;
     const { data: u } = await supabase.auth.getUser();
-    if (!u.user) return;
+    if (!u.user) {
+      setSaving(false);
+      return;
+    }
     const payload = workshopPayload(form, productState, u.user.id, workshop.client_id);
-    const { error } = await supabase.from("workshops").update({
-      name: payload.name,
-      category: payload.category,
-      price: payload.price,
-      currency: payload.currency,
-      discount: payload.discount,
-      tax: payload.tax,
-      deadline: payload.deadline,
-      start_date: payload.start_date,
-      priority: payload.priority,
-      description: payload.description,
-      product_ref_id: payload.product_ref_id,
-      category_path_snapshot: payload.category_path_snapshot,
-      options_snapshot: payload.options_snapshot,
-      custom_measurement: payload.custom_measurement,
-    }).eq("id", workshop.id);
+    const saved = await runWrite({
+      qc,
+      t,
+      meta: {
+        scopes: [...workshopScopes],
+        extraQueryKeys: [["workshop", workshop.id]],
+      },
+      write: () =>
+        writeUpdate({
+          table: "workshops",
+          payload: {
+            name: payload.name,
+            category: payload.category,
+            price: payload.price,
+            currency: payload.currency,
+            discount: payload.discount,
+            tax: payload.tax,
+            deadline: payload.deadline,
+            start_date: payload.start_date,
+            priority: payload.priority,
+            description: payload.description,
+            product_ref_id: payload.product_ref_id,
+            category_path_snapshot: payload.category_path_snapshot,
+            options_snapshot: payload.options_snapshot,
+            custom_measurement: payload.custom_measurement,
+          },
+          match: { column: "id", value: workshop.id },
+          scopes: [...workshopScopes],
+        }),
+    });
     setSaving(false);
-    if (error) return toast.error(error.message);
-    invalidateAfterWorkshopChange(qc);
-    qc.invalidateQueries({ queryKey: ["workshop", workshop.id] });
-    toast.success(t("toasts.saved"));
-    setOpen(false);
+    if (saved) setOpen(false);
   }
 
   return (

@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { usePh } from "@/hooks/use-ph";
-import { invalidateAfterClientChange } from "@/lib/invalidate-app-data";
+import { writeUpdate } from "@/lib/offline/offline-write";
+import { runWrite } from "@/lib/offline/run-write";
 import { clientSchema, formatZodError } from "@/lib/schemas";
 
 type NewClientModalProps = {
@@ -40,36 +41,40 @@ export function NewClientModal({ trigger, onCreated }: NewClientModalProps) {
       return;
     }
     setSaving(true);
-    try {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Not signed in");
-      const { name, phone, notes } = parsed.data;
-      const { data, error } = await supabase
-        .from("clients")
-        .insert({
-          full_name: name,
-          phone: phone || null,
-          whatsapp: phone || null,
-          notes: notes || null,
-          user_id: u.user.id,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      toast.success(t("toasts.clientAdded"));
-      setOpen(false);
-      resetForm();
-      invalidateAfterClientChange(qc);
-      if (onCreated) {
-        onCreated(data.id);
-      } else {
-        navigate({ to: "/clients/$id", params: { id: data.id } });
-      }
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : t("auth.errorGeneric"));
-    } finally {
-      setSaving(false);
-    }
+    const { name, phone, notes } = parsed.data;
+    const clientScopes = ["clients", "dashboard", "search", "activity"] as const;
+    const saved = await runWrite({
+      qc,
+      t,
+      meta: { scopes: [...clientScopes] },
+      successKey: "toasts.clientAdded",
+      write: async () => {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user) throw new Error("Not signed in");
+        return writeInsert<{ id: string }>({
+          table: "clients",
+          payload: {
+            full_name: name,
+            phone: phone || null,
+            whatsapp: phone || null,
+            notes: notes || null,
+            user_id: u.user.id,
+          },
+          select: "id",
+          scopes: [...clientScopes],
+        });
+      },
+      onSaved: (data) => {
+        setOpen(false);
+        resetForm();
+        if (onCreated) {
+          onCreated(data.id);
+        } else {
+          navigate({ to: "/clients/$id", params: { id: data.id } });
+        }
+      },
+    });
+    setSaving(false);
   }
 
   return (

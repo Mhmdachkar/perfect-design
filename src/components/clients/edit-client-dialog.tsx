@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { usePh } from "@/hooks/use-ph";
-import { invalidateAfterClientChange } from "@/lib/invalidate-app-data";
+import { writeUpdate } from "@/lib/offline/offline-write";
+import { runWrite } from "@/lib/offline/run-write";
 import { clientSchema, formatZodError } from "@/lib/schemas";
 
 type ClientRow = {
@@ -54,21 +55,29 @@ export function EditClientDialog({ client }: { client: ClientRow }) {
     setSaving(true);
     const phone = parsed.data.phone?.trim() || null;
     const notes = parsed.data.notes?.trim() || null;
-    const { error } = await supabase
-      .from("clients")
-      .update({
-        full_name: parsed.data.name,
-        phone,
-        whatsapp: phone,
-        notes,
-      })
-      .eq("id", client.id);
+    const clientScopes = ["clients", "dashboard", "search", "activity"] as const;
+    const saved = await runWrite({
+      qc,
+      t,
+      meta: {
+        scopes: [...clientScopes],
+        extraQueryKeys: [["client", client.id]],
+      },
+      write: () =>
+        writeUpdate({
+          table: "clients",
+          payload: {
+            full_name: parsed.data.name,
+            phone,
+            whatsapp: phone,
+            notes,
+          },
+          match: { column: "id", value: client.id },
+          scopes: [...clientScopes],
+        }),
+    });
     setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(t("toasts.saved"));
-    setOpen(false);
-    invalidateAfterClientChange(qc);
-    qc.invalidateQueries({ queryKey: ["client", client.id] });
+    if (saved) setOpen(false);
   }
 
   return (

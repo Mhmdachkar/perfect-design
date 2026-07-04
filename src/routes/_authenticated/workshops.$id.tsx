@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Empty } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,8 @@ import { ArrowLeft, Pencil, Trash2, CalendarDays, User, FileDown } from "lucide-
 import { toast } from "sonner";
 import { formatDate, formatDateTimeFull, formatMoney } from "@/lib/format";
 import { StatusPill } from "@/components/status-pill";
-import { softDeleteRow } from "@/lib/soft-delete";
+import { writeUpdate } from "@/lib/offline/offline-write";
+import { runSoftDelete, runWrite } from "@/lib/offline/run-write";
 import { NotesPanel } from "@/components/notes-panel";
 import { DocumentList } from "@/components/documents/document-list";
 import { PaymentDialog } from "@/components/payment-dialog";
@@ -18,12 +20,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TimelinePanel } from "@/components/timeline-panel";
 import { WorkshopTagPicker } from "@/components/workshop-tags";
 import { WorkshopInvoice } from "@/components/workshop-invoice";
-import { invalidateAfterWorkshopChange, invalidateAfterPaymentChange } from "@/lib/invalidate-app-data";
 import { fetchWorkshopActivity } from "@/lib/activity-queries";
 import { logActivity } from "@/lib/auth-activity";
+import { allowOfflineEntityAccess } from "@/lib/offline/route-guard";
 import { prefetchRouteQuery } from "@/lib/prefetch-route";
 
-const workshopDetail = (id: string) => queryOptions({
+const workshopDetail = (id: string) => appQueryOptions({
   queryKey: ["workshop", id],
   queryFn: async () => {
     const [w, fin, payments, notes, activity, tagAssigns] = await Promise.all([
@@ -44,9 +46,16 @@ const workshopDetail = (id: string) => queryOptions({
 });
 
 export const Route = createFileRoute("/_authenticated/workshops/$id")({
-  beforeLoad: async ({ params }) => {
-    const { data } = await supabase.from("workshops").select("id").eq("id", params.id).is("deleted_at", null).maybeSingle();
-    if (!data) throw redirect({ to: "/workshops" });
+  beforeLoad: async ({ params, context }) => {
+    const allowed = await allowOfflineEntityAccess(
+      context.queryClient,
+      ["workshop", params.id],
+      async () => {
+        const { data } = await supabase.from("workshops").select("id").eq("id", params.id).is("deleted_at", null).maybeSingle();
+        return !!data;
+      },
+    );
+    if (!allowed) throw redirect({ to: "/workshops" });
   },
   loader: ({ context, params }) => {
     prefetchRouteQuery(context.queryClient, workshopDetail(params.id));
@@ -59,7 +68,7 @@ const WORKFLOW_STATUSES = ["planning", "in_progress", "waiting", "completed", "c
 function WorkshopDetail() {
   const { t } = useTranslation();
   const { id } = Route.useParams();
-  const { data } = useSuspenseQuery(workshopDetail(id));
+  const { data } = useAppSuspenseQuery(workshopDetail(id));
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { w, fin, payments, notes, activity, tagIds } = data;
@@ -69,17 +78,34 @@ function WorkshopDetail() {
     if (!confirm(t("confirm.deleteWorkshop"))) return;
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { error } = await softDeleteRow("workshops", w.id, u.user.id);
-    if (error) return toast.error(error.message);
-    invalidateAfterWorkshopChange(qc);
-    navigate({ to: "/workshops" });
+    await runSoftDelete({
+      qc,
+      t,
+      table: "workshops",
+      id: w.id,
+      userId: u.user.id,
+      onSaved: () => navigate({ to: "/workshops" }),
+    });
   }
 
   async function setWorkflowStatus(value: string) {
-    const { error } = await supabase.from("workshops").update({ workflow_status: value as any }).eq("id", w.id);
-    if (error) return toast.error(error.message);
-    invalidateAfterWorkshopChange(qc);
-    toast.success(t("toasts.statusUpdated"));
+    const workshopScopes = ["workshops", "clients", "dashboard", "reports", "search", "notifications", "activity", "calendar"] as const;
+    await runWrite({
+      qc,
+      t,
+      meta: {
+        scopes: [...workshopScopes],
+        extraQueryKeys: [["workshop", w.id]],
+      },
+      successKey: "toasts.statusUpdated",
+      write: () =>
+        writeUpdate({
+          table: "workshops",
+          payload: { workflow_status: value },
+          match: { column: "id", value: w.id },
+          scopes: [...workshopScopes],
+        }),
+    });
   }
 
   async function printInvoice() {
@@ -235,9 +261,13 @@ function PaymentRow({ p, workshopId, clientId }: { p: any; workshopId: string; c
     if (!confirm(t("confirm.deletePayment"))) return;
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { error } = await softDeleteRow("payments", p.id, u.user.id);
-    if (error) return toast.error(error.message);
-    invalidateAfterPaymentChange(qc);
+    await runSoftDelete({
+      qc,
+      t,
+      table: "payments",
+      id: p.id,
+      userId: u.user.id,
+    });
   }
   return (
     <li className="flex items-center justify-between gap-3 py-3">

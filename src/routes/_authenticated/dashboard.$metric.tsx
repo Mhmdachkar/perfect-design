@@ -1,5 +1,5 @@
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation } from "react-i18next";
 import {
   fetchDashboardDetail,
@@ -25,7 +25,7 @@ import {
 import { formatCompact } from "@/lib/format";
 
 const detailQuery = (metric: DashboardMetricSlug) =>
-  queryOptions({
+  appQueryOptions({
     queryKey: ["dashboard-detail", metric],
     queryFn: () => fetchDashboardDetail(metric),
   });
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/_authenticated/dashboard/$metric")({
 
 function DashboardMetricPage() {
   const { metric } = Route.useParams();
-  const { data } = useSuspenseQuery(detailQuery(metric as DashboardMetricSlug));
+  const { data } = useAppSuspenseQuery(detailQuery(metric as DashboardMetricSlug));
   const { t } = useTranslation();
   const ccy = data.ccy;
   const k = data.kpis;

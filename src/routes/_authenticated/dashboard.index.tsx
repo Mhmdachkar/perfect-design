@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Empty } from "@/components/app-shell";
@@ -16,7 +16,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
-const dashboardData = queryOptions({
+const dashboardData = appQueryOptions({
   queryKey: ["dashboard"],
   queryFn: async () => {
     const [kpis, settings, upcoming, latestPayments, latestExpenses, paysRes, expsRes] = await Promise.all([
@@ -86,7 +86,7 @@ export const Route = createFileRoute("/_authenticated/dashboard/")({
 
 function Dashboard() {
   const { t } = useTranslation();
-  const { data } = useSuspenseQuery(dashboardData);
+  const { data } = useAppSuspenseQuery(dashboardData);
   const k = data.kpis;
   const ccy = data.settings.base_currency ?? "USD";
   const layout = parseDashboardLayout(data.settings.dashboard_layout);

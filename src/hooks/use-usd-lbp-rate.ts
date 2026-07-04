@@ -1,8 +1,8 @@
-import { useQuery, queryOptions } from "@tanstack/react-query";
+import { appQueryOptions, useAppQuery } from "@/lib/offline/app-query";
 import { supabase } from "@/integrations/supabase/client";
 import { findLatestUsdToLbpRate, type ExchangeRateRow } from "@/lib/currency";
 
-export const usdLbpRateQuery = queryOptions({
+export const usdLbpRateQuery = appQueryOptions({
   queryKey: ["exchange-rate", "USD", "LBP"],
   queryFn: async () => {
     const { data, error } = await supabase
@@ -19,7 +19,7 @@ export const usdLbpRateQuery = queryOptions({
 });
 
 export function useUsdLbpRate() {
-  const { data } = useQuery(usdLbpRateQuery);
+  const { data } = useAppQuery(usdLbpRateQuery);
   const row = data ? findLatestUsdToLbpRate([data]) : null;
   return {
     row,

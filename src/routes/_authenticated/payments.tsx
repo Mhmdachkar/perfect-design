@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation as useTranslationSafe } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Empty } from "@/components/app-shell";
@@ -12,13 +12,12 @@ import { applyFilterState, applyTextFilter } from "@/lib/filters";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Pencil } from "lucide-react";
-import { softDeleteRow } from "@/lib/soft-delete";
-import { invalidateAfterPaymentChange } from "@/lib/invalidate-app-data";
+import { runSoftDelete } from "@/lib/offline/run-write";
 import { prefetchRouteQuery } from "@/lib/prefetch-route";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-const paymentsQuery = queryOptions({
+const paymentsQuery = appQueryOptions({
   queryKey: ["payments-all"],
   queryFn: async () => {
     const [payments, settings] = await Promise.all([
@@ -43,7 +42,7 @@ export const Route = createFileRoute("/_authenticated/payments")({
 });
 
 function PaymentsPage() {
-  const { data } = useSuspenseQuery(paymentsQuery);
+  const { data } = useAppSuspenseQuery(paymentsQuery);
   const { t } = useTranslationSafe();
   const ph = usePh();
   const qc = useQueryClient();
@@ -65,10 +64,13 @@ function PaymentsPage() {
     if (!confirm(t("confirm.deletePaymentRecycle"))) return;
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { error } = await softDeleteRow("payments", id, u.user.id);
-    if (error) return toast.error(error.message);
-    invalidateAfterPaymentChange(qc);
-    toast.success(t("toasts.movedToRecycle"));
+    await runSoftDelete({
+      qc,
+      t,
+      table: "payments",
+      id,
+      userId: u.user.id,
+    });
   }
 
   return (

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Empty } from "@/components/app-shell";
@@ -9,7 +9,7 @@ import { useUiStore } from "@/stores/ui-store";
 import { prefetchRouteQuery } from "@/lib/prefetch-route";
 import { formatDate } from "@/lib/format";
 
-const calendarQuery = queryOptions({
+const calendarQuery = appQueryOptions({
   queryKey: ["calendar-workshops"],
   queryFn: async () => {
     const { data, error } = await supabase
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/calendar")({
 function CalendarPage() {
   const { t } = useTranslation();
   const locale = useUiStore((s) => s.locale);
-  const { data: items } = useSuspenseQuery(calendarQuery);
+  const { data: items } = useAppSuspenseQuery(calendarQuery);
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
   const byDate = new Map<string, any[]>();
   for (const w of items) {

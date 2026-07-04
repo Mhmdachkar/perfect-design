@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Empty } from "@/components/app-shell";
@@ -11,7 +11,7 @@ import { WhatsAppButton } from "@/components/whatsapp-button";
 import { usePh } from "@/hooks/use-ph";
 import { initialsOf, relativeTime } from "@/lib/format";
 
-const clientsQuery = queryOptions({
+const clientsQuery = appQueryOptions({
   queryKey: ["clients"],
   queryFn: async () => {
     const { data, error } = await supabase
@@ -39,7 +39,7 @@ function clientPhone(c: { phone?: string | null; whatsapp?: string | null }) {
 function ClientsPage() {
   const { t } = useTranslation();
   const ph = usePh();
-  const { data: clients } = useSuspenseQuery(clientsQuery);
+  const { data: clients } = useAppSuspenseQuery(clientsQuery);
   const [q, setQ] = useState("");
 
   const filtered = clients.filter((c) => {

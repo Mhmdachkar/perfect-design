@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { appQueryOptions } from "@/lib/offline/app-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export type CommandSearchResult = {
@@ -7,7 +7,7 @@ export type CommandSearchResult = {
   payments: { id: string; reference: string | null; amount: number; currency: string; workshop_id: string | null }[];
 };
 
-export const commandSearchQuery = queryOptions({
+export const commandSearchQuery = appQueryOptions({
   queryKey: ["command-search"],
   queryFn: async (): Promise<CommandSearchResult> => {
     const [clients, workshops, payments] = await Promise.all([
@@ -33,7 +33,7 @@ export type NotificationItem = {
   params?: { id: string };
 };
 
-export const notificationsQuery = queryOptions({
+export const notificationsQuery = appQueryOptions({
   queryKey: ["notifications"],
   queryFn: async (): Promise<NotificationItem[]> => {
     const today = new Date();

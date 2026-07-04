@@ -33,6 +33,13 @@
     "setRateHint": "Set the USD→LBP rate in Settings to see the converted amount.",
     "convertedAmount": "≈ {{amount}} (1 USD = {{rate}} LBP)"
   },
+    "offline": {
+    "workingOffline": "You are offline. Pages open from your saved copy — changes sync when you're back online.",
+    "workingOfflinePending": "You are offline. {{count}} change(s) saved locally, waiting to sync.",
+    "syncing": "Syncing {{count}} saved change(s)…",
+    "pendingSync": "{{count}} change(s) waiting to sync…",
+    "savedLocally": "Saved locally — will sync automatically when you're back online."
+  },
   "nav": {
     "dashboard": "Dashboard",
     "clients": "Clients",

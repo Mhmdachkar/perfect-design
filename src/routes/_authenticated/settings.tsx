@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -14,14 +15,15 @@ import { WorkshopTagsManager } from "@/components/workshop-tags";
 import { settingsBusinessSchema, formatZodError } from "@/lib/schemas";
 import { DEFAULT_DASHBOARD_LAYOUT } from "@/components/dashboard/widget-registry";
 import { logActivity } from "@/lib/auth-activity";
-import { invalidateAfterSettingsChange } from "@/lib/invalidate-app-data";
+import { writeDelete, writeInsert, writeUpdate, writeUpsert } from "@/lib/offline/offline-write";
+import { runWrite } from "@/lib/offline/run-write";
 import { prefetchRouteQuery } from "@/lib/prefetch-route";
 import { useTranslation } from "react-i18next";
 import { usePh } from "@/hooks/use-ph";
 import { findLatestUsdToLbpRate, type ExchangeRateRow } from "@/lib/currency";
 import { usdLbpRateQuery } from "@/hooks/use-usd-lbp-rate";
 
-const settingsQuery = queryOptions({
+const settingsQuery = appQueryOptions({
   queryKey: ["settings"],
   queryFn: async () => {
     const [s, rates] = await Promise.all([
@@ -42,7 +44,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function SettingsPage() {
   const { t } = useTranslation();
   const ph = usePh();
-  const { data } = useSuspenseQuery(settingsQuery);
+  const { data } = useAppSuspenseQuery(settingsQuery);
   const qc = useQueryClient();
   const [s, setS] = useState({
     business_name: data.settings?.business_name ?? "",
@@ -67,27 +69,48 @@ function SettingsPage() {
     }
     setSaving(true);
     const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from("app_settings").upsert({
-      ...s,
-      tax_rate: 0,
-      user_id: u.user!.id,
-    }, { onConflict: "user_id" });
+    if (!u.user) {
+      setSaving(false);
+      return;
+    }
+    await runWrite({
+      qc,
+      t,
+      meta: { scopes: [], settings: true, extraQueryKeys: [["settings"]] },
+      write: () =>
+        writeUpsert({
+          table: "app_settings",
+          payload: {
+            ...s,
+            tax_rate: 0,
+            user_id: u.user.id,
+          },
+          onConflict: "user_id",
+          scopes: [],
+          settings: true,
+        }),
+    });
     setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(t("toasts.saved"));
-    invalidateAfterSettingsChange(qc);
-    qc.invalidateQueries({ queryKey: ["settings"] });
   }
 
   async function resetDashboard() {
     const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from("app_settings").update({
-      dashboard_layout: DEFAULT_DASHBOARD_LAYOUT,
-    }).eq("user_id", u.user!.id);
-    if (error) return toast.error(error.message);
+    if (!u.user) return;
+    await runWrite({
+      qc,
+      t,
+      meta: { scopes: [], settings: true },
+      successKey: "toasts.layoutReset",
+      write: () =>
+        writeUpdate({
+          table: "app_settings",
+          payload: { dashboard_layout: DEFAULT_DASHBOARD_LAYOUT },
+          match: { column: "user_id", value: u.user.id },
+          scopes: [],
+          settings: true,
+        }),
+    });
     await logActivity("dashboard.layout_updated", "dashboard", undefined, undefined, { queryClient: qc });
-    toast.success(t("toasts.layoutReset"));
-    invalidateAfterSettingsChange(qc);
   }
 
   return (
@@ -141,26 +164,42 @@ function ExchangeRates({ rates }: { rates: ExchangeRateRow[] }) {
   async function saveRate() {
     if (!form.rate) return;
     const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from("exchange_rates").insert({
-      user_id: u.user!.id,
-      base_currency: "USD",
-      quote_currency: "LBP",
-      rate: Number(form.rate),
-      effective_date: form.effective_date,
+    if (!u.user) return;
+    await runWrite({
+      qc,
+      t,
+      meta: { scopes: [], settings: true, extraQueryKeys: [["settings"], usdLbpRateQuery.queryKey] },
+      successKey: "toasts.rateAdded",
+      write: () =>
+        writeInsert({
+          table: "exchange_rates",
+          payload: {
+            user_id: u.user.id,
+            base_currency: "USD",
+            quote_currency: "LBP",
+            rate: Number(form.rate),
+            effective_date: form.effective_date,
+          },
+          scopes: [],
+          settings: true,
+        }),
+      onSaved: () => setForm((f) => ({ ...f, rate: "" })),
     });
-    if (error) return toast.error(error.message);
-    toast.success(t("toasts.rateAdded"));
-    setForm((f) => ({ ...f, rate: "" }));
-    invalidateAfterSettingsChange(qc);
-    qc.invalidateQueries({ queryKey: ["settings"] });
-    qc.invalidateQueries({ queryKey: usdLbpRateQuery.queryKey });
   }
 
   async function del(id: string) {
-    await supabase.from("exchange_rates").delete().eq("id", id);
-    invalidateAfterSettingsChange(qc);
-    qc.invalidateQueries({ queryKey: ["settings"] });
-    qc.invalidateQueries({ queryKey: usdLbpRateQuery.queryKey });
+    await runWrite({
+      qc,
+      t,
+      meta: { scopes: [], settings: true, extraQueryKeys: [["settings"], usdLbpRateQuery.queryKey] },
+      write: () =>
+        writeDelete({
+          table: "exchange_rates",
+          match: { column: "id", value: id },
+          scopes: [],
+          settings: true,
+        }),
+    });
   }
 
   const previewAmount = Number(form.previewUsd);

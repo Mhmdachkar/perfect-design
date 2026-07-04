@@ -1,7 +1,9 @@
+import { useTranslation } from "react-i18next";
 import { useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAppQuery } from "@/lib/offline/app-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { softDeleteRow } from "@/lib/soft-delete";
+import { runSoftDelete } from "@/lib/offline/run-write";
 import { Button } from "@/components/ui/button";
 import { Upload, Download, Trash2, FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -11,10 +13,11 @@ import { invalidateAfterEntityTimelineChange } from "@/lib/invalidate-app-data";
 import { validateUploadFile, sanitizeFileName } from "@/lib/upload-validation";
 
 export function DocumentList({ entityType, entityId }: { entityType: string; entityId: string }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { data: docs = [] } = useQuery({
+  const { data: docs = [] } = useAppQuery({
     queryKey: ["documents", entityType, entityId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -78,10 +81,15 @@ export function DocumentList({ entityType, entityId }: { entityType: string; ent
     if (!confirm("Move document to recycle bin?")) return;
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { error } = await softDeleteRow("documents", id, u.user.id);
-    if (error) return toast.error(error.message);
-    invalidateAfterEntityTimelineChange(qc, entityType, entityId);
-    toast.success("Document deleted");
+    await runSoftDelete({
+      qc,
+      t,
+      table: "documents",
+      id,
+      userId: u.user.id,
+      entityTimeline: { entityType, entityId },
+      extraQueryKeys: [["documents", entityType, entityId]],
+    });
   }
 
   return (

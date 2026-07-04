@@ -2,16 +2,15 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { softDeleteRow } from "@/lib/soft-delete";
+import { writeInsert, writeUpdate } from "@/lib/offline/offline-write";
+import { runSoftDelete, runWrite } from "@/lib/offline/run-write";
 import { Empty } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Plus, Pencil, Trash2, FileText, Check, X } from "lucide-react";
-import { toast } from "sonner";
 import { relativeTime } from "@/lib/format";
 import { usePh } from "@/hooks/use-ph";
-import { invalidateAfterEntityTimelineChange } from "@/lib/invalidate-app-data";
 
 type Note = { id: string; body: string; created_at: string; updated_at?: string };
 
@@ -34,45 +33,77 @@ export function NotesPanel({
   const [editBody, setEditBody] = useState("");
   const qc = useQueryClient();
 
-  function invalidate() {
-    invalidateAfterEntityTimelineChange(qc, entityType, entityId);
-    if (queryKey) qc.invalidateQueries({ queryKey });
-  }
-
   async function add() {
     if (!body.trim()) return;
     setSaving(true);
-    const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from("notes").insert({
-      entity_type: entityType,
-      entity_id: entityId,
-      body,
-      user_id: u.user!.id,
+    const timeline = { entityType, entityId };
+    await runWrite({
+      qc,
+      t,
+      meta: {
+        scopes: ["activity"],
+        entityTimeline: timeline,
+        extraQueryKeys: queryKey ? [queryKey as readonly string[]] : undefined,
+      },
+      successKey: "toasts.noteAdded",
+      write: async () => {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user) throw new Error("Not signed in");
+        return writeInsert({
+          table: "notes",
+          payload: {
+            entity_type: entityType,
+            entity_id: entityId,
+            body,
+            user_id: u.user.id,
+          },
+          scopes: ["activity"],
+          entityTimeline: timeline,
+        });
+      },
+      onSaved: () => setBody(""),
     });
     setSaving(false);
-    if (error) return toast.error(error.message);
-    setBody("");
-    invalidate();
-    toast.success(t("toasts.noteAdded"));
   }
 
   async function saveEdit(id: string) {
     if (!editBody.trim()) return;
-    const { error } = await supabase.from("notes").update({ body: editBody }).eq("id", id);
-    if (error) return toast.error(error.message);
-    setEditingId(null);
-    invalidate();
-    toast.success(t("toasts.noteUpdated"));
+    const timeline = { entityType, entityId };
+    await runWrite({
+      qc,
+      t,
+      meta: {
+        scopes: ["activity"],
+        entityTimeline: timeline,
+        extraQueryKeys: queryKey ? [queryKey as readonly string[]] : undefined,
+      },
+      successKey: "toasts.noteUpdated",
+      write: () =>
+        writeUpdate({
+          table: "notes",
+          payload: { body: editBody },
+          match: { column: "id", value: id },
+          scopes: ["activity"],
+          entityTimeline: timeline,
+        }),
+      onSaved: () => setEditingId(null),
+    });
   }
 
   async function del(id: string) {
     if (!confirm(t("confirm.deleteNote"))) return;
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { error } = await softDeleteRow("notes", id, u.user.id);
-    if (error) return toast.error(error.message);
-    invalidate();
-    toast.success(t("toasts.noteDeleted"));
+    await runSoftDelete({
+      qc,
+      t,
+      table: "notes",
+      id,
+      userId: u.user.id,
+      successKey: "toasts.noteDeleted",
+      entityTimeline: { entityType, entityId },
+      extraQueryKeys: queryKey ? [queryKey as readonly string[]] : undefined,
+    });
   }
 
   return (

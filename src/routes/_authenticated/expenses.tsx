@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Empty } from "@/components/app-shell";
@@ -10,11 +11,9 @@ import { toast } from "sonner";
 import { formatDate, formatMoney } from "@/lib/format";
 import { FilterBar } from "@/components/filter-bar";
 import { ExpenseDialog } from "@/components/expense-dialog";
-import { invalidateAfterExpenseChange } from "@/lib/invalidate-app-data";
-import { prefetchRouteQuery } from "@/lib/prefetch-route";
-import { softDeleteRow } from "@/lib/soft-delete";
+import { runSoftDelete } from "@/lib/offline/run-write";
 
-const expensesQuery = queryOptions({
+const expensesQuery = appQueryOptions({
   queryKey: ["expenses"],
   queryFn: async () => {
     const [exps, settings] = await Promise.all([
@@ -37,7 +36,7 @@ const CATS = ["software", "hardware", "travel", "marketing", "rent", "utilities"
 
 function ExpensesPage() {
   const { t } = useTranslation();
-  const { data } = useSuspenseQuery(expensesQuery);
+  const { data } = useAppSuspenseQuery(expensesQuery);
   const qc = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({ category: "all", currency: "all" });
 
@@ -55,10 +54,13 @@ function ExpensesPage() {
     if (!confirm(t("confirm.deleteExpense"))) return;
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { error } = await softDeleteRow("expenses", id, u.user.id);
-    if (error) return toast.error(error.message);
-    invalidateAfterExpenseChange(qc);
-    toast.success(t("toasts.movedToRecycle"));
+    await runSoftDelete({
+      qc,
+      t,
+      table: "expenses",
+      id,
+      userId: u.user.id,
+    });
   }
 
   return (

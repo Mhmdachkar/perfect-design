@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -14,7 +14,7 @@ import { prefetchRouteQuery } from "@/lib/prefetch-route";
 import { FileDown, Camera } from "lucide-react";
 import { chartTheme } from "@/lib/chart-theme";
 
-const reportsQuery = queryOptions({
+const reportsQuery = appQueryOptions({
   queryKey: ["reports"],
   queryFn: async () => {
     const [pays, exps, ws, settings, snapshots] = await Promise.all([
@@ -48,7 +48,7 @@ const COLORS = chartTheme.palette;
 
 function Reports() {
   const { t } = useTranslation();
-  const { data } = useSuspenseQuery(reportsQuery);
+  const { data } = useAppSuspenseQuery(reportsQuery);
   const qc = useQueryClient();
   const ccy = data.baseCurrency;
   const monthly = build12(data.pays, data.exps);

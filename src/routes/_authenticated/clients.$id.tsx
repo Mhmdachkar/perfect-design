@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Empty } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -10,8 +11,7 @@ import { Briefcase, MessageCircle, Trash2, FileText, Wallet, ArrowLeft } from "l
 import { toast } from "sonner";
 import { formatDate, formatDateTimeFull, formatMoney, initialsOf, relativeTime } from "@/lib/format";
 import { DEFAULT_CURRENCY, normalizeCurrency } from "@/lib/currency";
-import { softDeleteRow } from "@/lib/soft-delete";
-import { invalidateAfterClientChange } from "@/lib/invalidate-app-data";
+import { runSoftDelete } from "@/lib/offline/run-write";
 import { fetchClientActivity } from "@/lib/activity-queries";
 import { prefetchRouteQuery } from "@/lib/prefetch-route";
 import { NotesPanel } from "@/components/notes-panel";
@@ -20,9 +20,10 @@ import { DocumentList } from "@/components/documents/document-list";
 import { PaymentDialog } from "@/components/payment-dialog";
 import { ExpenseDialog } from "@/components/expense-dialog";
 import { WhatsAppButton } from "@/components/whatsapp-button";
+import { allowOfflineEntityAccess } from "@/lib/offline/route-guard";
 import { StatusPill } from "@/components/status-pill";
 
-const clientDetail = (id: string) => queryOptions({
+const clientDetail = (id: string) => appQueryOptions({
   queryKey: ["client", id],
   queryFn: async () => {
     const [c, workshops, payments, expenses, notes, activity, settings] = await Promise.all([
@@ -49,9 +50,16 @@ const clientDetail = (id: string) => queryOptions({
 });
 
 export const Route = createFileRoute("/_authenticated/clients/$id")({
-  beforeLoad: async ({ params }) => {
-    const { data } = await supabase.from("clients").select("id").eq("id", params.id).is("deleted_at", null).maybeSingle();
-    if (!data) throw redirect({ to: "/clients" });
+  beforeLoad: async ({ params, context }) => {
+    const allowed = await allowOfflineEntityAccess(
+      context.queryClient,
+      ["client", params.id],
+      async () => {
+        const { data } = await supabase.from("clients").select("id").eq("id", params.id).is("deleted_at", null).maybeSingle();
+        return !!data;
+      },
+    );
+    if (!allowed) throw redirect({ to: "/clients" });
   },
   loader: ({ context, params }) => {
     prefetchRouteQuery(context.queryClient, clientDetail(params.id));
@@ -62,7 +70,7 @@ export const Route = createFileRoute("/_authenticated/clients/$id")({
 function ClientDetail() {
   const { t } = useTranslation();
   const { id } = Route.useParams();
-  const { data } = useSuspenseQuery(clientDetail(id));
+  const { data } = useAppSuspenseQuery(clientDetail(id));
   const qc = useQueryClient();
   const navigate = useNavigate();
   const c = data.client;
@@ -77,11 +85,14 @@ function ClientDetail() {
     if (!confirm(t("confirm.deleteClient", { name: c.full_name }))) return;
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { error } = await softDeleteRow("clients", c.id, u.user.id);
-    if (error) return toast.error(error.message);
-    toast.success(t("toasts.movedToRecycle"));
-    invalidateAfterClientChange(qc);
-    navigate({ to: "/clients" });
+    await runSoftDelete({
+      qc,
+      t,
+      table: "clients",
+      id: c.id,
+      userId: u.user.id,
+      onSaved: () => navigate({ to: "/clients" }),
+    });
   }
 
   return (

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions, useQuery } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Empty } from "@/components/app-shell";
@@ -13,7 +13,7 @@ import { usePh } from "@/hooks/use-ph";
 import { prefetchRouteQuery } from "@/lib/prefetch-route";
 import { NewWorkshopDialog } from "@/components/workshop-dialog";
 
-const workshopsQuery = queryOptions({
+const workshopsQuery = appQueryOptions({
   queryKey: ["workshops"],
   queryFn: async () => {
     const [ws, settings] = await Promise.all([
@@ -40,7 +40,7 @@ export const Route = createFileRoute("/_authenticated/workshops/")({
   component: WorkshopsPage,
 });
 
-const clientsLite = queryOptions({
+const clientsLite = appQueryOptions({
   queryKey: ["clients-lite"],
   queryFn: async () => {
     const { data, error } = await supabase.from("clients").select("id,full_name").is("deleted_at", null).order("full_name");
@@ -54,7 +54,7 @@ const COLUMN_KEYS = ["planning", "in_progress", "waiting", "completed"] as const
 function WorkshopsPage() {
   const { t } = useTranslation();
   const ph = usePh();
-  const { data } = useSuspenseQuery(workshopsQuery);
+  const { data } = useAppSuspenseQuery(workshopsQuery);
   const workshops = data.workshops;
   const baseCurrency = data.baseCurrency;
   const [view, setView] = useState<"board" | "list">("board");

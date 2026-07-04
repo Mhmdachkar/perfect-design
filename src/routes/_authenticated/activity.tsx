@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { appQueryOptions, useAppSuspenseQuery } from "@/lib/offline/app-query";
 import { useTranslation as useTranslationActivity } from "react-i18next";
 import { PageHeader } from "@/components/app-shell";
 import { TimelinePanel } from "@/components/timeline-panel";
 import { fetchGlobalActivity } from "@/lib/activity-queries";
 import { prefetchRouteQuery } from "@/lib/prefetch-route";
 
-const activityQuery = queryOptions({
+const activityQuery = appQueryOptions({
   queryKey: ["activity"],
   queryFn: () => fetchGlobalActivity(200),
 });
@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/activity")({
 
 function ActivityPage() {
   const { t } = useTranslationActivity();
-  const { data: log } = useSuspenseQuery(activityQuery);
+  const { data: log } = useAppSuspenseQuery(activityQuery);
   return (
     <div>
       <PageHeader title={t("activity.title")} description={t("activity.subtitle")} />
