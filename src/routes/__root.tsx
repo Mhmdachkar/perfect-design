@@ -18,6 +18,7 @@ import { useLocaleSync } from "@/hooks/use-locale";
 import { logAuthActivity } from "@/lib/auth-activity";
 import { useUiStore } from "@/stores/ui-store";
 import { APP_NAME, APP_TAGLINE } from "@/lib/brand";
+import { getSupabaseRuntimeEnvScript } from "@/integrations/supabase/public-env";
 
 function NotFoundComponent() {
   return (
@@ -89,9 +90,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  const supabaseEnvScript = getSupabaseRuntimeEnvScript();
+
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <head><HeadContent /></head>
+      <head>
+        <HeadContent />
+        {supabaseEnvScript ? (
+          <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: supabaseEnvScript }} />
+        ) : null}
+      </head>
       <body className="min-h-screen bg-background text-foreground antialiased">{children}<Scripts /></body>
     </html>
   );
