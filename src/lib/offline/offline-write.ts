@@ -1,7 +1,7 @@
 import type { AppDataScope } from "@/lib/invalidate-app-data";
 import { appendMutation } from "./queue-store";
 import { executeMutation } from "./execute-mutation";
-import { isBrowserOnline, isRetryableNetworkError, raceWithTimeout } from "./network";
+import { isBrowserOnline, isRetryableNetworkError, isTimeoutError, markConnectionDegraded, raceWithTimeout } from "./network";
 import type { MutationOp, QueuedMutation, WriteResult } from "./types";
 
 type WriteMeta = {
@@ -55,7 +55,12 @@ async function attemptWrite<T>(execute: () => Promise<T>): Promise<T> {
   if (!isBrowserOnline()) {
     throw new Error("offline");
   }
-  return raceWithTimeout(execute());
+  try {
+    return await raceWithTimeout(execute());
+  } catch (err) {
+    if (isTimeoutError(err)) markConnectionDegraded();
+    throw err;
+  }
 }
 
 export async function writeInsert<T = { id: string }>(options: InsertOptions): Promise<WriteResult<T>> {

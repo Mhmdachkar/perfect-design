@@ -8,7 +8,7 @@ import {
   type UseSuspenseQueryOptions,
 } from "@tanstack/react-query";
 import { getOfflineQueryFallback } from "./query-fallbacks";
-import { isBrowserOnline } from "./network";
+import { isBrowserOnline, isSlowConnection, isTimeoutError, markConnectionDegraded } from "./network";
 
 const OFFLINE_QUERY_DEFAULTS = {
   networkMode: "offlineFirst" as const,
@@ -28,7 +28,8 @@ function wrapQueryFn<T>(queryKey: QueryKey, queryFn: QueryFunction<T, QueryKey, 
       return await queryFn(ctx);
     } catch (err) {
       if (cached !== undefined) return cached;
-      if (!isBrowserOnline()) return getOfflineQueryFallback<T>(queryKey);
+      if (isTimeoutError(err)) markConnectionDegraded();
+      if (!isBrowserOnline() || isSlowConnection()) return getOfflineQueryFallback<T>(queryKey);
       throw err;
     }
   };
