@@ -6,6 +6,7 @@ import { PageHeader, Empty } from "@/components/app-shell";
 import { Briefcase, LayoutGrid, List, Search } from "lucide-react";
 import { useState } from "react";
 import { formatDate, formatMoney } from "@/lib/format";
+import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { StatusPill } from "@/components/status-pill";
 import { FilterBar } from "@/components/filter-bar";
 import { usePh } from "@/hooks/use-ph";
@@ -15,13 +16,19 @@ import { NewWorkshopDialog } from "@/components/workshop-dialog";
 const workshopsQuery = queryOptions({
   queryKey: ["workshops"],
   queryFn: async () => {
-    const { data, error } = await supabase
-      .from("workshop_financials")
-      .select("id,name,client_name,workflow_status,financial_status,remaining_base,final_amount_base,deadline,category,priority,created_at,paid_base")
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (error) throw error;
-    return data;
+    const [ws, settings] = await Promise.all([
+      supabase
+        .from("workshop_financials")
+        .select("id,name,client_name,workflow_status,financial_status,remaining_base,final_amount_base,deadline,category,priority,created_at,paid_base")
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabase.from("app_settings").select("base_currency").maybeSingle(),
+    ]);
+    if (ws.error) throw ws.error;
+    return {
+      workshops: ws.data ?? [],
+      baseCurrency: settings.data?.base_currency ?? DEFAULT_CURRENCY,
+    };
   },
 });
 
@@ -47,7 +54,9 @@ const COLUMN_KEYS = ["planning", "in_progress", "waiting", "completed"] as const
 function WorkshopsPage() {
   const { t } = useTranslation();
   const ph = usePh();
-  const { data: workshops } = useSuspenseQuery(workshopsQuery);
+  const { data } = useSuspenseQuery(workshopsQuery);
+  const workshops = data.workshops;
+  const baseCurrency = data.baseCurrency;
   const [view, setView] = useState<"board" | "list">("board");
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({ workflow_status: "all", financial_status: "all", tag: "all" });
@@ -132,7 +141,7 @@ function WorkshopsPage() {
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">{w.client_name}{w.category ? ` · ${w.category}` : ""}</p>
                       <div className="mt-2 flex items-center justify-between">
                         <StatusPill status={w.financial_status} kind="financial" />
-                        <p className="text-xs font-semibold num-tabular">{formatMoney(w.final_amount_base, "LYD")}</p>
+                        <p className="text-xs font-semibold num-tabular">{formatMoney(w.final_amount_base, baseCurrency)}</p>
                       </div>
                       {w.deadline && <p className="mt-1.5 text-[11px] text-muted-foreground">{t("detail.due", { date: formatDate(w.deadline) })}</p>}
                     </Link>
@@ -156,8 +165,8 @@ function WorkshopsPage() {
                   <p className="mt-1 truncate text-xs text-muted-foreground">{w.client_name}{w.category ? ` · ${w.category}` : ""} · {w.deadline ? t("detail.due", { date: formatDate(w.deadline) }) : t("detail.noDeadline")}</p>
                 </div>
                 <div className="text-right text-xs">
-                  <p className="font-semibold num-tabular">{formatMoney(w.final_amount_base, "LYD")}</p>
-                  <p className="text-muted-foreground">{formatMoney(w.paid_base, "LYD")} {t("workshops.paid").toLowerCase()}</p>
+                  <p className="font-semibold num-tabular">{formatMoney(w.final_amount_base, baseCurrency)}</p>
+                  <p className="text-muted-foreground">{formatMoney(w.paid_base, baseCurrency)} {t("workshops.paid").toLowerCase()}</p>
                 </div>
               </Link>
             </li>

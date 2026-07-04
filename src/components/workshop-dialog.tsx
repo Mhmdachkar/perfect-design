@@ -13,6 +13,10 @@ import { toast } from "sonner";
 import { usePh } from "@/hooks/use-ph";
 import { invalidateAfterWorkshopChange } from "@/lib/invalidate-app-data";
 import { WorkshopProductFields } from "@/components/workshop-product-fields";
+import { CurrencySelect } from "@/components/currency-select";
+import { CurrencyConversionHint } from "@/components/currency-conversion-hint";
+import { useUsdLbpRate } from "@/hooks/use-usd-lbp-rate";
+import { DEFAULT_CURRENCY, normalizeCurrency, type AppCurrency } from "@/lib/currency";
 import {
   buildOptionsSnapshot,
   emptyProductFormState,
@@ -72,7 +76,7 @@ function emptyForm(): FormState {
     name: "",
     client_id: "",
     base_amount: "",
-    currency: "LYD",
+    currency: DEFAULT_CURRENCY,
     discount: "0",
     deadline: "",
     start_date: "",
@@ -97,7 +101,7 @@ function workshopPayload(
     client_id: clientId ?? form.client_id,
     name: form.name,
     price: Number(form.base_amount) || 0,
-    currency: form.currency as "USD" | "LBP" | "LYD",
+    currency: form.currency as AppCurrency,
     discount: Number(form.discount) || 0,
     tax: 0,
     deadline: form.deadline || null,
@@ -120,6 +124,7 @@ export function NewWorkshopDialog() {
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
   const { data: clients } = useSuspenseQuery(clientsLite);
+  const { rate } = useUsdLbpRate();
   const [form, setForm] = useState(emptyForm);
   const [productState, setProductState] = useState(emptyProductFormState);
 
@@ -205,17 +210,11 @@ export function NewWorkshopDialog() {
             <div className="space-y-1.5">
               <Label>{t("common.amount")} *</Label>
               <Input type="number" step="0.01" required placeholder={ph.workshop.amount} value={form.base_amount} onChange={(e) => setForm((f) => ({ ...f, base_amount: e.target.value }))} />
+              <CurrencyConversionHint amount={form.base_amount} currency={form.currency} rate={rate} />
             </div>
             <div className="space-y-1.5">
               <Label>{t("common.currency")}</Label>
-              <Select value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="LYD">LYD</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="LBP">LBP</SelectItem>
-                </SelectContent>
-              </Select>
+              <CurrencySelect value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))} />
             </div>
             <div className="space-y-1.5"><Label>{t("invoice.discount")}</Label><Input type="number" step="0.01" placeholder={ph.workshop.discount} value={form.discount} onChange={(e) => setForm((f) => ({ ...f, discount: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>{t("workshops.deadline")}</Label><Input type="date" value={form.deadline} onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))} /></div>
@@ -251,11 +250,12 @@ export function EditWorkshopDialog({ workshop }: { workshop: WorkshopRow }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
+  const { rate } = useUsdLbpRate();
   const [form, setForm] = useState<FormState>(() => ({
     name: workshop.name,
     client_id: workshop.client_id,
     base_amount: String(workshop.price ?? 0),
-    currency: workshop.currency ?? "LYD",
+    currency: normalizeCurrency(workshop.currency),
     discount: String(workshop.discount ?? 0),
     deadline: workshop.deadline?.slice(0, 10) ?? "",
     start_date: workshop.start_date?.slice(0, 10) ?? "",
@@ -273,7 +273,7 @@ export function EditWorkshopDialog({ workshop }: { workshop: WorkshopRow }) {
         name: workshop.name,
         client_id: workshop.client_id,
         base_amount: String(workshop.price ?? 0),
-        currency: workshop.currency ?? "LYD",
+        currency: normalizeCurrency(workshop.currency),
         discount: String(workshop.discount ?? 0),
         deadline: workshop.deadline?.slice(0, 10) ?? "",
         start_date: workshop.start_date?.slice(0, 10) ?? "",
@@ -339,17 +339,10 @@ export function EditWorkshopDialog({ workshop }: { workshop: WorkshopRow }) {
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5 col-span-2"><Label>{t("common.name")}</Label><Input placeholder={ph.workshop.name} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>{t("common.amount")}</Label><Input type="number" step="0.01" placeholder={ph.workshop.amount} value={form.base_amount} onChange={(e) => setForm((f) => ({ ...f, base_amount: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>{t("common.amount")}</Label><Input type="number" step="0.01" placeholder={ph.workshop.amount} value={form.base_amount} onChange={(e) => setForm((f) => ({ ...f, base_amount: e.target.value }))} /><CurrencyConversionHint amount={form.base_amount} currency={form.currency} rate={rate} /></div>
             <div className="space-y-1.5">
               <Label>{t("common.currency")}</Label>
-              <Select value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="LYD">LYD</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="LBP">LBP</SelectItem>
-                </SelectContent>
-              </Select>
+              <CurrencySelect value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))} />
             </div>
             <div className="space-y-1.5"><Label>{t("invoice.discount")}</Label><Input type="number" step="0.01" placeholder={ph.workshop.discount} value={form.discount} onChange={(e) => setForm((f) => ({ ...f, discount: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>{t("workshops.deadline")}</Label><Input type="date" value={form.deadline} onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))} /></div>

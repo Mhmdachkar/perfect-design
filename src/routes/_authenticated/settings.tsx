@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Save, Plus, Trash2, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { WorkshopTagsManager } from "@/components/workshop-tags";
 import { settingsBusinessSchema, formatZodError } from "@/lib/schemas";
 import { DEFAULT_DASHBOARD_LAYOUT } from "@/components/dashboard/widget-registry";
@@ -18,6 +18,8 @@ import { invalidateAfterSettingsChange } from "@/lib/invalidate-app-data";
 import { prefetchRouteQuery } from "@/lib/prefetch-route";
 import { useTranslation } from "react-i18next";
 import { usePh } from "@/hooks/use-ph";
+import { findLatestUsdToLbpRate, type ExchangeRateRow } from "@/lib/currency";
+import { usdLbpRateQuery } from "@/hooks/use-usd-lbp-rate";
 
 const settingsQuery = queryOptions({
   queryKey: ["settings"],
@@ -125,62 +127,139 @@ function SettingsPage() {
   );
 }
 
-function ExchangeRates({ rates }: { rates: any[] }) {
+function ExchangeRates({ rates }: { rates: ExchangeRateRow[] }) {
   const { t } = useTranslation();
   const ph = usePh();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ base_currency: "USD", quote_currency: "LBP", rate: "", effective_date: new Date().toISOString().slice(0, 10) });
-  async function add() {
+  const active = findLatestUsdToLbpRate(rates);
+  const [form, setForm] = useState({
+    rate: "",
+    effective_date: new Date().toISOString().slice(0, 10),
+    previewUsd: "100",
+  });
+
+  async function saveRate() {
     if (!form.rate) return;
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("exchange_rates").insert({
-      user_id: u.user!.id, base_currency: form.base_currency as any, quote_currency: form.quote_currency as any,
-      rate: Number(form.rate), effective_date: form.effective_date,
+      user_id: u.user!.id,
+      base_currency: "USD",
+      quote_currency: "LBP",
+      rate: Number(form.rate),
+      effective_date: form.effective_date,
     });
     if (error) return toast.error(error.message);
     toast.success(t("toasts.rateAdded"));
-    setForm(f => ({ ...f, rate: "" }));
+    setForm((f) => ({ ...f, rate: "" }));
     invalidateAfterSettingsChange(qc);
     qc.invalidateQueries({ queryKey: ["settings"] });
+    qc.invalidateQueries({ queryKey: usdLbpRateQuery.queryKey });
   }
+
   async function del(id: string) {
     await supabase.from("exchange_rates").delete().eq("id", id);
     invalidateAfterSettingsChange(qc);
     qc.invalidateQueries({ queryKey: ["settings"] });
+    qc.invalidateQueries({ queryKey: usdLbpRateQuery.queryKey });
   }
+
+  const previewAmount = Number(form.previewUsd);
+  const previewLbp =
+    active && Number.isFinite(previewAmount) && previewAmount > 0
+      ? previewAmount * Number(active.rate)
+      : null;
+
   return (
     <section className="surface-card p-6">
-      <h2 className="mb-1 text-base font-semibold tracking-tight">{t("settings.exchangeRates")}</h2>
-      <p className="mb-4 text-xs text-muted-foreground">{t("settingsPage.exchangeRatesHint")}</p>
-      <div className="grid gap-3 rounded-xl border border-border bg-surface-2 p-4 sm:grid-cols-5">
-        <Select value={form.base_currency} onValueChange={(v) => setForm(f => ({ ...f, base_currency: v }))}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="USD">USD</SelectItem><SelectItem value="LBP">LBP</SelectItem></SelectContent>
-        </Select>
-        <Select value={form.quote_currency} onValueChange={(v) => setForm(f => ({ ...f, quote_currency: v }))}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="USD">USD</SelectItem><SelectItem value="LBP">LBP</SelectItem></SelectContent>
-        </Select>
-        <Input type="number" step="0.0001" placeholder={ph.settings.exchangeRate} value={form.rate} onChange={(e) => setForm(f => ({ ...f, rate: e.target.value }))} />
-        <Input type="date" value={form.effective_date} onChange={(e) => setForm(f => ({ ...f, effective_date: e.target.value }))} />
-        <Button onClick={add}><Plus className="mr-1 h-4 w-4" />{t("settingsPage.addRate")}</Button>
+      <h2 className="mb-1 text-base font-semibold tracking-tight">{t("settingsPage.lebanonRateTitle")}</h2>
+      <p className="mb-4 text-xs text-muted-foreground">{t("settingsPage.lebanonRateHint")}</p>
+
+      {active ? (
+        <div className="mb-4 rounded-xl border border-border bg-surface-2 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("settingsPage.currentRate")}</p>
+          <p className="mt-1 text-lg font-semibold num-tabular">
+            1 USD = {Number(active.rate).toLocaleString("en-US")} LBP
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t("settingsPage.effective")}: {formatDate(active.effective_date)}
+          </p>
+        </div>
+      ) : (
+        <p className="mb-4 rounded-xl border border-dashed border-border bg-surface-2 px-4 py-3 text-sm text-muted-foreground">
+          {t("settingsPage.noRateYet")}
+        </p>
+      )}
+
+      <div className="grid gap-3 rounded-xl border border-border bg-surface-2 p-4 sm:grid-cols-2">
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>{t("settingsPage.usdToLbpRate")}</Label>
+          <Input
+            type="number"
+            step="1"
+            min="1"
+            placeholder={ph.settings.exchangeRate}
+            value={form.rate}
+            onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
+          />
+          <p className="text-[11px] text-muted-foreground">{t("settingsPage.usdToLbpRateHint")}</p>
+        </div>
+        <div className="space-y-1.5">
+          <Label>{t("settingsPage.effective")}</Label>
+          <Input
+            type="date"
+            value={form.effective_date}
+            onChange={(e) => setForm((f) => ({ ...f, effective_date: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>{t("settingsPage.previewUsd")}</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={form.previewUsd}
+            onChange={(e) => setForm((f) => ({ ...f, previewUsd: e.target.value }))}
+          />
+          {previewLbp != null && (
+            <p className="text-sm font-medium num-tabular text-primary">
+              = {formatMoney(previewLbp, "LBP")}
+            </p>
+          )}
+        </div>
+        <div className="sm:col-span-2">
+          <Button onClick={saveRate} disabled={!form.rate}>
+            <Plus className="mr-1 h-4 w-4" />
+            {t("settingsPage.saveLebanonRate")}
+          </Button>
+        </div>
       </div>
 
-      {rates.length > 0 && (
+      {rates.filter((r) => r.base_currency === "USD" && r.quote_currency === "LBP").length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-2 text-left text-xs uppercase text-muted-foreground">
-              <tr><th className="px-4 py-2.5 font-medium">{t("settingsPage.pair")}</th><th className="px-4 py-2.5 font-medium">{t("settingsPage.rate")}</th><th className="px-4 py-2.5 font-medium">{t("settingsPage.effective")}</th><th /></tr>
+              <tr>
+                <th className="px-4 py-2.5 font-medium">{t("settingsPage.rate")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("settingsPage.effective")}</th>
+                <th />
+              </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rates.map(r => (
-                <tr key={r.id}>
-                  <td className="px-4 py-2.5">1 {r.base_currency} = {r.quote_currency}</td>
-                  <td className="px-4 py-2.5 num-tabular">{Number(r.rate).toLocaleString()}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{formatDate(r.effective_date)}</td>
-                  <td className="px-4 py-2.5 text-right"><Button variant="ghost" size="icon" onClick={() => del(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
-                </tr>
-              ))}
+              {rates
+                .filter((r) => r.base_currency === "USD" && r.quote_currency === "LBP")
+                .map((r) => (
+                  <tr key={r.id}>
+                    <td className="px-4 py-2.5 num-tabular">
+                      1 USD = {Number(r.rate).toLocaleString("en-US")} LBP
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{formatDate(r.effective_date)}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <Button variant="ghost" size="icon" onClick={() => del(r.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>

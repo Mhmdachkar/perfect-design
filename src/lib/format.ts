@@ -1,9 +1,10 @@
 export function formatMoney(n: number | null | undefined, currency = "USD") {
   const v = Number(n ?? 0);
-  if (currency === "LBP") {
+  const ccy = currency === "LBP" ? "LBP" : "USD";
+  if (ccy === "LBP") {
     return `${Math.round(v).toLocaleString("en-US")} LBP`;
   }
-  return v.toLocaleString("en-US", { style: "currency", currency, maximumFractionDigits: 2 });
+  return v.toLocaleString("en-US", { style: "currency", currency: ccy, maximumFractionDigits: 2 });
 }
 
 export function formatCompact(n: number | null | undefined) {

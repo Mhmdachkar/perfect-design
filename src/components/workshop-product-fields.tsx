@@ -86,7 +86,7 @@ export function WorkshopProductFields({ state, onChange, onProductSelect }: Prop
               {group.products.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {locale === "ar" ? p.nameAr : p.name}
-                  {p.basePrice != null ? ` (${p.basePrice} LYD)` : ""}
+                  {p.basePrice != null ? ` (${p.basePrice} USD)` : ""}
                 </SelectItem>
               ))}
             </SelectContent>

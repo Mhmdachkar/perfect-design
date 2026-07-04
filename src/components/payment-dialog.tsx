@@ -20,6 +20,10 @@ import {
   toTimestampIso,
 } from "@/lib/datetime";
 import { formatDateTimeFull, formatMoney } from "@/lib/format";
+import { CurrencySelect } from "@/components/currency-select";
+import { CurrencyConversionHint } from "@/components/currency-conversion-hint";
+import { useUsdLbpRate } from "@/hooks/use-usd-lbp-rate";
+import { DEFAULT_CURRENCY, normalizeCurrency, type AppCurrency } from "@/lib/currency";
 
 type Payment = {
   id: string;
@@ -59,7 +63,7 @@ export function PaymentDialog({
   payment,
   workshopId,
   clientId,
-  defaultCurrency = "LYD",
+  defaultCurrency = DEFAULT_CURRENCY,
   trigger,
 }: {
   payment?: Payment;
@@ -77,7 +81,7 @@ export function PaymentDialog({
 
   const [form, setForm] = useState(() =>
     emptyForm({
-      currency: defaultCurrency,
+      currency: normalizeCurrency(defaultCurrency),
       client_id: clientId ?? "",
       workshop_id: workshopId ?? "",
     }),
@@ -88,7 +92,7 @@ export function PaymentDialog({
     if (payment) {
       setForm({
         amount: String(payment.amount),
-        currency: payment.currency,
+        currency: normalizeCurrency(payment.currency),
         method: payment.method,
         received_date: toDateTimeLocalValue(payment.received_date) || nowDateTimeLocal(),
         due_date: toDateTimeLocalValue(payment.due_date) || nowDateTimeLocal(),
@@ -101,7 +105,7 @@ export function PaymentDialog({
     }
     setForm(
       emptyForm({
-        currency: defaultCurrency,
+        currency: normalizeCurrency(defaultCurrency),
         client_id: clientId ?? "",
         workshop_id: workshopId ?? "",
       }),
@@ -123,7 +127,7 @@ export function PaymentDialog({
     const { data: u } = await supabase.auth.getUser();
     const payload = {
       amount: parsed.data.amount,
-      currency: parsed.data.currency as "USD" | "LBP" | "LYD",
+      currency: parsed.data.currency as AppCurrency,
       method: parsed.data.method as (typeof METHODS)[number] | (typeof LEGACY_METHODS)[number],
       received_date: toTimestampIso(form.received_date),
       due_date: toTimestampIso(form.due_date),
@@ -199,6 +203,7 @@ function PaymentFormFields({
 }) {
   const { t } = useTranslation();
   const ph = usePh();
+  const { rate } = useUsdLbpRate();
 
   return (
     <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
@@ -215,17 +220,11 @@ function PaymentFormFields({
             value={form.amount}
             onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
           />
+          <CurrencyConversionHint amount={form.amount} currency={form.currency} rate={rate} />
         </div>
         <div className="space-y-1.5">
           <Label>{t("common.currency")}</Label>
-          <Select value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="LYD">LYD</SelectItem>
-              <SelectItem value="USD">USD</SelectItem>
-              <SelectItem value="LBP">LBP</SelectItem>
-            </SelectContent>
-          </Select>
+          <CurrencySelect value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))} />
         </div>
         <div className="space-y-1.5 col-span-2">
           <Label>{t("payments.method")} *</Label>

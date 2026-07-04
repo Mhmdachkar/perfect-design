@@ -29,6 +29,10 @@
     "of": "من",
     "total": "الإجمالي"
   },
+  "currency": {
+    "setRateHint": "حدّد سعر USD→LBP من الإعدادات لعرض المبلغ المحوّل.",
+    "convertedAmount": "≈ {{amount}} (1 USD = {{rate}} LBP)"
+  },
   "nav": {
     "dashboard": "لوحة التحكم",
     "clients": "العملاء",
@@ -524,7 +528,15 @@
     "phone": "الهاتف",
     "logoUrl": "رابط الشعار",
     "address": "العنوان",
-    "invoiceFooter": "تذييل الفاتورة"
+    "invoiceFooter": "تذييل الفاتورة",
+    "lebanonRateTitle": "سعر الصرف في لبنان (USD → LBP)",
+    "lebanonRateHint": "حدّد عدد الليرات اللبنانية مقابل الدولار الأمريكي. تُحوَّل المبالغ بين USD و LBP باستخدام هذا السعر.",
+    "currentRate": "السعر الحالي",
+    "noRateYet": "لم يُضبط سعر صرف بعد. أضف سعراً أدناه لحساب LBP من USD.",
+    "usdToLbpRate": "1 USD يساوي (LBP)",
+    "usdToLbpRateHint": "أدخل السعر الحالي في لبنان، مثال: 89500",
+    "previewUsd": "معاينة (USD)",
+    "saveLebanonRate": "حفظ سعر الصرف"
   },
   "recyclePage": {
     "restoreSelected": "استعادة المحدد ({{count}})",

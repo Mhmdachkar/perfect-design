@@ -9,6 +9,7 @@ import { EditClientDialog } from "@/components/clients/edit-client-dialog";
 import { Briefcase, MessageCircle, Trash2, FileText, Wallet, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate, formatDateTimeFull, formatMoney, initialsOf, relativeTime } from "@/lib/format";
+import { DEFAULT_CURRENCY, normalizeCurrency } from "@/lib/currency";
 import { softDeleteRow } from "@/lib/soft-delete";
 import { invalidateAfterClientChange } from "@/lib/invalidate-app-data";
 import { fetchClientActivity } from "@/lib/activity-queries";
@@ -24,13 +25,14 @@ import { StatusPill } from "@/components/status-pill";
 const clientDetail = (id: string) => queryOptions({
   queryKey: ["client", id],
   queryFn: async () => {
-    const [c, workshops, payments, expenses, notes, activity] = await Promise.all([
+    const [c, workshops, payments, expenses, notes, activity, settings] = await Promise.all([
       supabase.from("clients").select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
-      supabase.from("workshop_financials").select("id,name,workflow_status,financial_status,remaining_base,final_amount_base,deadline,category,priority,created_at").eq("client_id", id).order("created_at", { ascending: false }),
+      supabase.from("workshop_financials").select("id,name,workflow_status,financial_status,remaining_base,final_amount_base,deadline,category,priority,created_at,paid_base").eq("client_id", id).order("created_at", { ascending: false }),
       supabase.from("payments").select("*,workshops(name),created_at").eq("client_id", id).is("deleted_at", null).order("received_date", { ascending: false }),
       supabase.from("expenses").select("*").eq("client_id", id).is("deleted_at", null).order("expense_date", { ascending: false }),
       supabase.from("notes").select("*").eq("entity_type", "client").eq("entity_id", id).is("deleted_at", null).order("created_at", { ascending: false }),
       fetchClientActivity(id),
+      supabase.from("app_settings").select("base_currency").maybeSingle(),
     ]);
     if (c.error) throw c.error;
     if (!c.data) throw new Error("Client not found");
@@ -41,6 +43,7 @@ const clientDetail = (id: string) => queryOptions({
       expenses: expenses.data ?? [],
       notes: notes.data ?? [],
       activity: activity ?? [],
+      baseCurrency: settings.data?.base_currency ?? DEFAULT_CURRENCY,
     };
   },
 });
@@ -63,7 +66,7 @@ function ClientDetail() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const c = data.client;
-  const ccy = "LYD";
+  const ccy = data.baseCurrency;
   const phone = c.phone || c.whatsapp || "";
 
   const totalRevenue = data.workshops.reduce((s, w: any) => s + Number(w.final_amount_base || 0), 0);
@@ -156,10 +159,10 @@ function ClientDetail() {
 
         <TabsContent value="payments" className="mt-4">
           <div className="mb-3 flex justify-end">
-            <PaymentDialog clientId={c.id} defaultCurrency="LYD" trigger={<Button className="rounded-xl"><Wallet className="mr-1.5 h-4 w-4" />{t("payments.newPayment")}</Button>} />
+            <PaymentDialog clientId={c.id} defaultCurrency={DEFAULT_CURRENCY} trigger={<Button className="rounded-xl"><Wallet className="mr-1.5 h-4 w-4" />{t("payments.newPayment")}</Button>} />
           </div>
           {data.payments.length === 0 ? (
-            <Empty icon={Wallet} title={t("empty.noPayments")} action={<PaymentDialog clientId={c.id} defaultCurrency="LYD" />} />
+            <Empty icon={Wallet} title={t("empty.noPayments")} action={<PaymentDialog clientId={c.id} defaultCurrency={DEFAULT_CURRENCY} />} />
           ) : (
             <ul className="surface-card divide-y divide-border">
               {data.payments.map((p: any) => (
@@ -171,7 +174,7 @@ function ClientDetail() {
                       {p.reference ? ` · ${p.reference}` : ""}
                     </p>
                   </div>
-                  <p className="text-sm font-semibold num-tabular text-success">{formatMoney(p.amount, p.currency)}</p>
+                  <p className="text-sm font-semibold num-tabular text-success">{formatMoney(p.amount, normalizeCurrency(p.currency))}</p>
                 </li>
               ))}
             </ul>
@@ -192,7 +195,7 @@ function ClientDetail() {
                     <p className="truncate text-sm font-medium">{e.name}</p>
                     <p className="text-xs capitalize text-muted-foreground">{t(`expenses.categories.${e.category}`)} · {formatDate(e.expense_date)}</p>
                   </div>
-                  <p className="text-sm font-semibold num-tabular text-destructive">−{formatMoney(e.amount, e.currency)}</p>
+                  <p className="text-sm font-semibold num-tabular text-destructive">−{formatMoney(e.amount, normalizeCurrency(e.currency))}</p>
                 </li>
               ))}
             </ul>

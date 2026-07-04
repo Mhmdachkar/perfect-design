@@ -12,6 +12,10 @@ import { toast } from "sonner";
 import { usePh } from "@/hooks/use-ph";
 import { invalidateAfterExpenseChange } from "@/lib/invalidate-app-data";
 import { expenseSchema, formatZodError } from "@/lib/schemas";
+import { CurrencySelect } from "@/components/currency-select";
+import { CurrencyConversionHint } from "@/components/currency-conversion-hint";
+import { useUsdLbpRate } from "@/hooks/use-usd-lbp-rate";
+import { normalizeCurrency, type AppCurrency } from "@/lib/currency";
 
 const CATS = ["software", "hardware", "travel", "marketing", "rent", "utilities", "supplies", "freelancer", "other"] as const;
 
@@ -31,12 +35,13 @@ export function ExpenseDialog({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
+  const { rate } = useUsdLbpRate();
   const isEdit = !!expense;
 
   const [form, setForm] = useState({
     name: expense?.name ?? "",
     amount: expense ? String(expense.amount) : "",
-    currency: expense?.currency ?? "USD",
+    currency: normalizeCurrency(expense?.currency),
     category: expense?.category ?? "other",
     expense_date: expense?.expense_date ?? new Date().toISOString().slice(0, 10),
     vendor: expense?.vendor ?? "",
@@ -50,7 +55,7 @@ export function ExpenseDialog({
       setForm({
         name: expense.name ?? "",
         amount: String(expense.amount),
-        currency: expense.currency ?? "USD",
+        currency: normalizeCurrency(expense.currency),
         category: expense.category ?? "other",
         expense_date: expense.expense_date ?? new Date().toISOString().slice(0, 10),
         vendor: expense.vendor ?? "",
@@ -132,16 +137,11 @@ export function ExpenseDialog({
             <div className="space-y-1.5">
               <Label>{t("common.amount")} *</Label>
               <Input type="number" step="0.01" required placeholder={ph.expense.amount} value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+              <CurrencyConversionHint amount={form.amount} currency={form.currency} rate={rate} />
             </div>
             <div className="space-y-1.5">
               <Label>{t("common.currency")}</Label>
-              <Select value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="LBP">LBP</SelectItem>
-                </SelectContent>
-              </Select>
+              <CurrencySelect value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))} />
             </div>
             <div className="space-y-1.5">
               <Label>{t("common.category")}</Label>

@@ -29,6 +29,10 @@
     "of": "of",
     "total": "Total"
   },
+  "currency": {
+    "setRateHint": "Set the USD→LBP rate in Settings to see the converted amount.",
+    "convertedAmount": "≈ {{amount}} (1 USD = {{rate}} LBP)"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "clients": "Clients",
@@ -524,7 +528,15 @@
     "phone": "Phone",
     "logoUrl": "Logo URL",
     "address": "Address",
-    "invoiceFooter": "Invoice footer"
+    "invoiceFooter": "Invoice footer",
+    "lebanonRateTitle": "Lebanon exchange rate (USD → LBP)",
+    "lebanonRateHint": "Set how many Lebanese pounds equal one US dollar. Amounts in USD or LBP are converted using this rate.",
+    "currentRate": "Current rate",
+    "noRateYet": "No exchange rate set yet. Add one below so LBP amounts can be calculated from USD.",
+    "usdToLbpRate": "1 USD equals (LBP)",
+    "usdToLbpRateHint": "Enter the current rate in Lebanon, e.g. 89500",
+    "previewUsd": "Preview (USD)",
+    "saveLebanonRate": "Save exchange rate"
   },
   "recyclePage": {
     "restoreSelected": "Restore selected ({{count}})",
@@ -562,7 +574,7 @@
     "workshop": {
       "name": "e.g. Blackout curtains — master bedroom",
       "type": "Curtains, Printing, Frames, Office supplies",
-      "amount": "Quote total (LYD)",
+      "amount": "Quote total (USD or LBP)",
       "discount": "Bulk or loyalty discount",
       "description": "Fabric, dimensions, flex/vinyl specs, installation…",
       "search": "Search orders, clients, or product type…",
