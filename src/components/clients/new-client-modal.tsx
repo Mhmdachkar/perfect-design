@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { usePh } from "@/hooks/use-ph";
-import { writeUpdate } from "@/lib/offline/offline-write";
+import { writeInsert } from "@/lib/offline/offline-write";
 import { runWrite } from "@/lib/offline/run-write";
 import { clientSchema, formatZodError } from "@/lib/schemas";
 

@@ -22,7 +22,6 @@ import { useUiStore } from "@/stores/ui-store";
 import { APP_NAME, APP_TAGLINE } from "@/lib/brand";
 import { initSyncEngine } from "@/lib/offline/sync-engine";
 import { clearQueue } from "@/lib/offline/queue-store";
-import { OfflineBanner } from "@/components/offline-banner";
 import { OfflineQueryRestoreGate } from "@/components/offline-query-restore-gate";
 import { isBrowserOnline } from "@/lib/offline/network";
 
@@ -170,7 +169,6 @@ function RootComponent() {
       }
     >
       <OfflineQueryRestoreGate>
-        <OfflineBanner />
         <Outlet />
       </OfflineQueryRestoreGate>
       <Toaster position={locale === "ar" ? "top-left" : "top-right"} theme={theme === "light" ? "light" : "dark"} />

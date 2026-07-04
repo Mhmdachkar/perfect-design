@@ -70,14 +70,18 @@ export function subscribeNetworkStatus(listener: NetworkListener) {
   initNetworkListeners();
   listeners.add(listener);
   listener(isBrowserOnline());
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function subscribeConnectionQuality(listener: ConnectionQualityListener) {
   initNetworkListeners();
   qualityListeners.add(listener);
   listener(shouldShowOfflineBanner());
-  return () => qualityListeners.delete(listener);
+  return () => {
+    qualityListeners.delete(listener);
+  };
 }
 
 export function isRetryableNetworkError(err: unknown): boolean {

@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Empty } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EditWorkshopDialog } from "@/components/workshop-dialog";
 import { ArrowLeft, Pencil, Trash2, CalendarDays, User, FileDown } from "lucide-react";
 import { toast } from "sonner";

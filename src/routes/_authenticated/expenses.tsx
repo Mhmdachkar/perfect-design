@@ -12,6 +12,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { FilterBar } from "@/components/filter-bar";
 import { ExpenseDialog } from "@/components/expense-dialog";
 import { runSoftDelete } from "@/lib/offline/run-write";
+import { prefetchRouteQuery } from "@/lib/prefetch-route";
 
 const expensesQuery = appQueryOptions({
   queryKey: ["expenses"],
